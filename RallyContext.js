@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useMemo, useCallback } from 'react';
-import { Alert } from 'react-native';
+import {
+  CheckCircle2, ShieldCheck, ShieldAlert, Clock, RefreshCw, XCircle, AlertCircle,
+} from 'lucide-react-native';
 
 // ─── Seed Data ───────────────────────────────────────────────
 const DEFAULT_MODULES = [
@@ -89,39 +91,54 @@ export function RallyProvider({ children }) {
   const [pendingCertificate, setPendingCertificate] = useState(null);   // { tier, hours } | null
   const [claimedCertificates, setClaimedCertificates] = useState([]);   // tiers already shown
 
+  // ── Global Modal State ──────────────────────────────────
+  // Replaces Alert.alert — renders identically on iOS, Android, and web.
+  // See src/components/RallyModal.js for the consumer.
+  const [modal, setModal] = useState(null);
+  const showModal = useCallback((payload) => setModal(payload), []);
+  const hideModal = useCallback(() => setModal(null), []);
+
   // ── Session Actions ──────────────────────────────────────
   // Join + optional equipment request. equipmentNeeded is an array of strings.
   const joinRallySession = useCallback((sessionId, equipmentNeeded = []) => {
     setSessions(prev => prev.map(s => {
       if (s.id === sessionId) {
         if (s.isUserEnrolled) {
-          Alert.alert('Already Registered', 'You are already registered for this session.');
+          showModal({
+            title: 'Already Registered',
+            message: 'You are already registered for this session.',
+            icon: AlertCircle,
+            iconColor: '#FF9500',
+          });
           return s;
         }
         const eqMsg = equipmentNeeded.length > 0
-          ? `\n\n🎒 Equipment reserved: ${equipmentNeeded.join(', ')}`
-          : '\n\n🎒 No equipment requested — bring your own gear.';
+          ? `\n\nEquipment reserved: ${equipmentNeeded.join(', ')}`
+          : '\n\nNo equipment requested — bring your own gear.';
 
-        Alert.alert(
-          '✨ Spot Reserved',
-          `You're registered for "${s.title}". Tap GPS Check-In when you arrive.${eqMsg}`
-        );
+        showModal({
+          title: 'Spot Reserved',
+          message: `You're registered for "${s.title}". Tap GPS Check-In when you arrive.${eqMsg}`,
+          icon: CheckCircle2,
+          iconColor: '#34C759',
+        });
         return { ...s, attendees: s.attendees + 1, isUserEnrolled: true };
       }
       return s;
     }));
-  }, []);
+  }, [showModal]);
 
   // GPS arrival verification — updates session AND profile; fires tier certificate if milestone crossed
   const verifySafeZoneArrival = useCallback((sessionId) => {
     setSessions(prev => prev.map(s =>
       s.id === sessionId ? { ...s, zoneVerified: true } : s
     ));
-    Alert.alert(
-      '🔒 Safe-Zone Check-In Confirmed',
-      'GPS match verified. Logged 1.5 impact hours and awarded +50 points.',
-      [{ text: 'Dismiss' }]
-    );
+    showModal({
+      title: 'Safe-Zone Check-In Confirmed',
+      message: 'GPS match verified. Logged 1.5 impact hours and awarded +50 points.',
+      icon: ShieldCheck,
+      iconColor: '#34C759',
+    });
 
     const oldHours = userProfile.hoursContributed;
     const newHours = oldHours + 1.5;
@@ -140,22 +157,37 @@ export function RallyProvider({ children }) {
     } else if (newTier !== oldTier && !claimedCertificates.includes(newTier)) {
       setPendingCertificate({ tier: newTier, hours: newHours });
     }
-  }, [userProfile, claimedCertificates]);
+  }, [userProfile, claimedCertificates, showModal]);
 
   const connectParentDashboard = useCallback(() => {
     setUserProfile(prev => ({ ...prev, parentConnected: true }));
-    Alert.alert('Guardian Verified', 'Encrypted push notifications synced with Guardian dashboard.');
-  }, []);
+    showModal({
+      title: 'Guardian Verified',
+      message: 'Encrypted push notifications synced with the Guardian dashboard.',
+      icon: ShieldCheck,
+      iconColor: '#34C759',
+    });
+  }, [showModal]);
 
   const handlePendingRequest = useCallback((requestId, action) => {
     setPendingRequests(prev => prev.filter(req => req.id !== requestId));
     if (action === 'accept') {
-      Alert.alert('Session Confirmed', 'The student has been notified and a secure chat portal has opened.');
+      showModal({
+        title: 'Session Confirmed',
+        message: 'The student has been notified and a secure chat portal has opened.',
+        icon: CheckCircle2,
+        iconColor: '#34C759',
+      });
       setUserProfile(prev => ({ ...prev, hoursContributed: prev.hoursContributed + 2 }));
     } else {
-      Alert.alert('Declined', 'The request has been routed back into the available cohort pool.');
+      showModal({
+        title: 'Request Declined',
+        message: 'The request has been routed back into the available cohort pool.',
+        icon: XCircle,
+        iconColor: '#8E8E93',
+      });
     }
-  }, []);
+  }, [showModal]);
 
   const completeAcademyModule = useCallback((moduleId) => {
     setAcademyModules(prev => prev.map(mod => {
@@ -168,22 +200,26 @@ export function RallyProvider({ children }) {
   }, []);
 
   const triggerPanicButton = useCallback(() => {
-    Alert.alert(
-      '🚨 Emergency Alert',
-      'All guardians and site administrators will be notified with your GPS coordinates.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'CONFIRM DISPATCH', style: 'destructive' },
-      ]
-    );
-  }, []);
+    showModal({
+      title: 'Emergency Alert',
+      message: 'All guardians and site administrators will be notified with your GPS coordinates.',
+      icon: ShieldAlert,
+      iconColor: '#FF3B30',
+      buttons: [
+        { label: 'Cancel', style: 'cancel' },
+        { label: 'CONFIRM DISPATCH', style: 'destructive' },
+      ],
+    });
+  }, [showModal]);
 
   const joinWaitlist = useCallback((sessionId) => {
-    Alert.alert(
-      '📋 Added to Waitlist',
-      "You'll be notified immediately if a spot opens. We'll also flag this area for additional coaches."
-    );
-  }, []);
+    showModal({
+      title: 'Added to Waitlist',
+      message: "You'll be notified the moment a spot opens. We'll also flag this area for additional coaches.",
+      icon: Clock,
+      iconColor: '#0A84FF',
+    });
+  }, [showModal]);
 
   const completeOnboarding = useCallback(() => setOnboardingComplete(true), []);
 
@@ -211,6 +247,7 @@ export function RallyProvider({ children }) {
     setPendingRequests(DEFAULT_PENDING_REQUESTS);
     setPendingCertificate(null);
     setClaimedCertificates([]);
+    setModal(null);
   }, []);
 
   const claimCertificate = useCallback(() => {
@@ -233,6 +270,7 @@ export function RallyProvider({ children }) {
     hasAgreedToCoachPolicy, agreeToCoachPolicy,
     pendingCertificate, claimCertificate,
     resetDemo,
+    modal, showModal, hideModal,
   }), [
     demoMode, userRole, userProfile, sessions, academyModules,
     pendingRequests, joinRallySession, verifySafeZoneArrival,
@@ -242,6 +280,7 @@ export function RallyProvider({ children }) {
     hasAgreedToCoachPolicy, agreeToCoachPolicy,
     pendingCertificate, claimCertificate,
     resetDemo,
+    modal, showModal, hideModal,
   ]);
 
   return (

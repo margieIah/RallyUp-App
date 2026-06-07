@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  StyleSheet, View, Text, ScrollView, TouchableOpacity, Alert, Modal, Animated, Easing,
+  StyleSheet, View, Text, ScrollView, TouchableOpacity, Modal, Animated, Easing,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -81,6 +81,7 @@ export default function ProfileScreen() {
     userProfile, setUserProfile,
     academyModules, completeAcademyModule,
     agreeToCoachPolicy, resetDemo,
+    showModal,
   } = useRally();
 
   const [showCertModal, setShowCertModal] = useState(false);
@@ -99,7 +100,12 @@ export default function ProfileScreen() {
       rankScore: newRole === 'student' ? 124 : 75,
       parentConnected: newRole !== 'student',
     });
-    Alert.alert('Persona Switched', `Switched to ${newRole.toUpperCase()} view across all tabs.`);
+    showModal({
+      title: 'Persona Switched',
+      message: `Switched to ${newRole.toUpperCase()} view across all tabs.`,
+      icon: RefreshCw,
+      iconColor: '#FF9500',
+    });
   };
 
   const allModulesComplete = academyModules.every(m => m.completed);
@@ -377,9 +383,13 @@ export default function ProfileScreen() {
               <Text style={styles.certHours}>
                 {userProfile.hoursContributed.toFixed(1)} hrs documented
               </Text>
-              <AnimBtn style={styles.certBtn} onPress={() => setShowCertModal(false)}>
-                <Text style={styles.certBtnText}>Close</Text>
-              </AnimBtn>
+              {/* alignSelf: 'stretch' overrides certCard's alignItems: center so the
+                  button fills the card width instead of collapsing to its text width. */}
+              <View style={styles.certBtnWrap}>
+                <AnimBtn style={styles.certBtn} onPress={() => setShowCertModal(false)}>
+                  <Text style={styles.certBtnText}>Done</Text>
+                </AnimBtn>
+              </View>
             </View>
           </View>
         </Modal>
@@ -577,10 +587,11 @@ const styles = StyleSheet.create({
   certTitle: { color: '#FFFFFF', fontSize: 24, fontWeight: '900', textAlign: 'center', lineHeight: 30, marginBottom: 20, letterSpacing: -0.6 },
   certTierBadge: { borderWidth: 1.5, borderRadius: 20, paddingHorizontal: 20, paddingVertical: 8, marginBottom: 16 },
   certTierText: { fontSize: 12, fontWeight: '900', letterSpacing: 1.2 },
-  certHours: { color: '#8E8E93', fontSize: 13, marginBottom: 28, fontWeight: '500' },
+  certHours: { color: '#8E8E93', fontSize: 13, marginBottom: 32, fontWeight: '500' },
+  certBtnWrap: { alignSelf: 'stretch' },
   certBtn: {
-    backgroundColor: '#FF9500', borderRadius: 16, paddingVertical: 18,
-    width: '100%', alignItems: 'center',
+    backgroundColor: '#FF9500', borderRadius: 16, paddingVertical: 20,
+    alignItems: 'center',
     boxShadow: '0 8px 22px rgba(255,149,0,0.4)',
   },
   certBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '900', letterSpacing: 0.2 },

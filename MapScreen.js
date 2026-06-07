@@ -1,27 +1,33 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  StyleSheet, View, Text, TouchableOpacity, ScrollView, Alert,
+  StyleSheet, View, Text, TouchableOpacity, ScrollView,
   Platform, useWindowDimensions, Dimensions, Animated, Easing,
 } from 'react-native';
 import {
   MapPin, ShieldCheck, X, WifiOff, Layers,
-  Clock, Star, Users,
+  Clock, Star, Users, Package,
 } from 'lucide-react-native';
 import { useRally } from '../context/RallyContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-let MapView, Marker;
-if (Platform.OS !== 'web') {
-  try {
-    const MapComponents = require('react-native-maps');
-    MapView = MapComponents.default;
-    Marker = MapComponents.Marker;
-  } catch (e) { /* offline blueprint fallback */ }
-}
+// Metro's platform-extension resolver picks the right implementation per platform:
+//   NativeMap.js     → loaded on iOS / Android (uses react-native-maps / Apple Maps)
+//   NativeMap.web.js → loaded on web          (stub returning null)
+//   WebMap.web.js    → loaded on web          (uses @vis.gl/react-google-maps)
+//   WebMap.js        → loaded on native       (stub returning null)
+// Both components share the same prop interface so MapScreen just swaps by Platform.OS.
+import NativeMap from '../components/NativeMap';
+import WebMap from '../components/WebMap';
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
 const SPORT_EMOJI = { Basketball: '🏀', Soccer: '⚽', Volleyball: '🏐' };
 const SPORT_COLOR = { Basketball: '#FF9500', Soccer: '#34C759', Volleyball: '#0A84FF' };
+
+// Web-only Google Maps key — loaded from .env via Expo's EXPO_PUBLIC_* convention.
+// Used by the Phase 2 Google Maps integration. Empty string when unset, which the
+// integration will treat as "fall back to the offline blueprint" so the app still works
+// during local dev without a key.
+const GOOGLE_MAPS_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '';
 
 const PressCard = ({ onPress, style, children }) => {
   const scale = useRef(new Animated.Value(1)).current;
@@ -80,7 +86,7 @@ export default function MapScreen() {
   const insets = useSafeAreaInsets();
   const isTablet = width > 768;
 
-  const { sessions, joinRallySession, joinWaitlist } = useRally();
+  const { sessions, joinRallySession, joinWaitlist, showModal } = useRally();
   const [selectedSession, setSelectedSession] = useState(null);
   const [offlineFallback, setOfflineFallback] = useState(false);
 
@@ -119,14 +125,17 @@ export default function MapScreen() {
       closePanel();
       return;
     }
-    Alert.alert(
-      'Need Equipment?',
-      `Free gear on-site:\n${gear.map(g => `  • ${g}`).join('\n')}\n\nReserve equipment?`,
-      [
-        { text: 'No Thanks', onPress: () => { joinRallySession(session.id, []); closePanel(); } },
-        { text: 'Reserve All', onPress: () => { joinRallySession(session.id, gear); closePanel(); } },
-      ]
-    );
+    showModal({
+      title: 'Need Equipment?',
+      message: `Free gear on-site:\n${gear.map(g => `  •  ${g}`).join('\n')}\n\nReserve equipment?`,
+      messageAlign: 'left',
+      icon: Package,
+      iconColor: '#0A84FF',
+      buttons: [
+        { label: 'No Thanks', onPress: () => { joinRallySession(session.id, []); closePanel(); } },
+        { label: 'Reserve All', style: 'primary', onPress: () => { joinRallySession(session.id, gear); closePanel(); } },
+      ],
+    });
   };
 
   const renderOfflineBlueprint = () => (
@@ -197,21 +206,35 @@ export default function MapScreen() {
     ? { width: 380, right: 0, top: 0, bottom: 0, borderLeftWidth: 1, paddingTop: Math.max(insets.top, 40) }
     : { left: 0, right: 0, bottom: 0, maxHeight: SCREEN_HEIGHT * 0.62, borderTopLeftRadius: 28, borderTopRightRadius: 28 };
 
+  // Render decision:
+  //   1. User toggled Offline                       → blueprint everywhere
+  //   2. Web + Google Maps API key present          → WebMap   (Google)
+  //   3. Native (iOS / Android)                     → NativeMap (Apple)
+  //   4. Web without an API key                     → blueprint
+  const showOnline = !offlineFallback;
+  const isWeb = Platform.OS === 'web';
+  const canShowWebLive = isWeb && Boolean(GOOGLE_MAPS_API_KEY);
+
   return (
     <View style={styles.container}>
-      {Platform.OS === 'web' || offlineFallback || !MapView
+      {!showOnline || (isWeb && !canShowWebLive)
         ? renderOfflineBlueprint()
-        : (
-          <MapView style={styles.map} initialRegion={initialRegion} userInterfaceStyle="dark">
-            {sessions.map(s => (
-              <Marker key={s.id} coordinate={s.coordinates} onPress={() => setSelectedSession(s)}>
-                <View style={[styles.pin, { backgroundColor: SPORT_COLOR[s.sport] || '#FF9500' }]}>
-                  <Text style={{ fontSize: 15 }}>{SPORT_EMOJI[s.sport] || '📍'}</Text>
-                </View>
-              </Marker>
-            ))}
-          </MapView>
-        )
+        : isWeb
+          ? (
+            <WebMap
+              apiKey={GOOGLE_MAPS_API_KEY}
+              sessions={sessions}
+              onSelectSession={setSelectedSession}
+              initialRegion={initialRegion}
+            />
+          )
+          : (
+            <NativeMap
+              sessions={sessions}
+              onSelectSession={setSelectedSession}
+              initialRegion={initialRegion}
+            />
+          )
       }
 
       {/* Mode toggle — direct TouchableOpacity so absolute positioning applies to the hit area */}
