@@ -16,6 +16,9 @@ import ProfileScreen from './src/screens/ProfileScreen';
 import AuthScreen from './src/screens/AuthScreen';
 import CoachPolicyScreen from './src/screens/CoachPolicyScreen';
 
+// Global custom modal (replaces native Alert.alert / window.alert on web)
+import RallyModal from './src/components/RallyModal';
+
 const Tab = createBottomTabNavigator();
 
 export default function App() {
@@ -23,6 +26,7 @@ export default function App() {
     <SafeAreaProvider>
       <RallyProvider>
         <MainAppFlow />
+        <RallyModal />
       </RallyProvider>
     </SafeAreaProvider>
   );
